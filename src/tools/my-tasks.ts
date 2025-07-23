@@ -24,7 +24,7 @@ export async function myTasksTool(
       };
     }
     
-    const params = myTasksSchema.parse(args);
+    const params = myTasksSchema.parse(args || {});
     
     const response = await client.listTasks({
       assignee_id: config.PRODUCTIVE_USER_ID,
@@ -32,7 +32,7 @@ export async function myTasksTool(
       limit: params.limit,
     });
     
-    if (!response.data || response.data.length === 0) {
+    if (!response || !response.data || response.data.length === 0) {
       return {
         content: [{
           type: 'text',
@@ -41,7 +41,7 @@ export async function myTasksTool(
       };
     }
     
-    const tasksText = response.data.map(task => {
+    const tasksText = response.data.filter(task => task && task.attributes).map(task => {
       const projectId = task.relationships?.project?.data?.id;
       const statusIcon = task.attributes.status === 2 ? '✓' : '○';
       const statusText = task.attributes.status === 1 ? 'open' : task.attributes.status === 2 ? 'closed' : `status ${task.attributes.status}`;

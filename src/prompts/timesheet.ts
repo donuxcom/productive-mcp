@@ -38,7 +38,10 @@ This requires 5 steps to ensure your time is logged to the correct budget and se
 2. **💰 Budget/Deal Selection** - Choose the correct budget or deal within the project  
 3. **⚙️ Service Selection** - Pick the specific service type for this work
 4. **📋 Task Selection** - Link to a specific task (recommended)
-5. **📝 Time Entry Creation** - Log time with detailed work notes
+5. **📝 Time Entry Creation** - Preview and confirm your time entry before creation
+
+**IMPORTANT: CONFIRMATION REQUIRED**
+In Step 5, I will show you exactly what will be created and ask for your confirmation before actually logging the time. This prevents accidental entries.
 
 **WHY THIS WORKFLOW?**
 Productive.io follows a strict hierarchy: Project → Budget/Deal → Service → Task → Time Entry
@@ -111,8 +114,19 @@ Please tell me which project you worked on, or I can list all active projects fo
 **Step 4:** With the project_id, I'll run:
 \`get_project_tasks project_id="[PROJECT_ID]"\` to show tasks you can link to (recommended)
 
-**Step 5:** Finally, I'll create the time entry:
+**Step 5:** Finally, I'll prepare your time entry for confirmation:
 \`create_time_entry\` with all the selected details plus your detailed work description
+- First call: Shows you a preview of what will be created
+- You confirm: I'll call again with \`confirm: true\` to actually create the entry
+
+**CONFIRMATION PROCESS:**
+Before any time is logged, you'll see:
+- The exact date, time, and duration
+- Which project, service, and task it's linked to
+- Your work description
+- Who the time is being logged for
+
+Only after you explicitly confirm will the time entry be created.
 
 **READY TO START?** 
 Tell me the project name or say "list projects" to see all available projects.`
@@ -189,8 +203,8 @@ export async function generateQuickTimesheetPrompt(args: unknown): Promise<{
         break;
         
       case 'create':
-        stepGuidance = '**STEP 5: 📝 CREATE TIME ENTRY**\nReady to log your time with detailed work notes.';
-        nextAction = `Use: \`create_time_entry\` with service_id="${params.service_id}"${params.task_id ? `, task_id="${params.task_id}"` : ''}, detailed notes, date, and time.`;
+        stepGuidance = '**STEP 5: 📝 CREATE TIME ENTRY WITH CONFIRMATION**\nReady to preview and confirm your time entry before creation.';
+        nextAction = `Use: \`create_time_entry\` with service_id="${params.service_id}"${params.task_id ? `, task_id="${params.task_id}"` : ''}, detailed notes, date, and time.\n\n**IMPORTANT CONFIRMATION PROCESS:**\n1. First call without \`confirm: true\` - Shows preview of what will be created\n2. Review the details carefully\n3. If correct, call again with \`confirm: true\` to actually create the entry\n\nThis two-step process prevents accidental time entries.`;
         break;
     }
 

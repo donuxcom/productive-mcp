@@ -12,23 +12,25 @@ export async function listBoards(
   args: unknown
 ): Promise<{ content: Array<{ type: string; text: string }> }> {
   try {
-    const params = ListBoardsSchema.parse(args);
+    const params = ListBoardsSchema.parse(args || {});
     
     const response = await client.listBoards({
       project_id: params.project_id,
       limit: params.limit,
     });
     
-    if (!response.data || response.data.length === 0) {
+    // Add defensive checks for response structure
+    if (!response || !response.data || response.data.length === 0) {
+      const filterText = params.project_id ? ` for project ${params.project_id}` : '';
       return {
         content: [{
           type: 'text',
-          text: 'No boards found',
+          text: `No boards found${filterText}`,
         }],
       };
     }
     
-    const boardsText = response.data.map(board => {
+    const boardsText = response.data.filter(board => board && board.attributes).map(board => {
       let text = `Board: ${board.attributes.name} (ID: ${board.id})`;
       if (board.attributes.description) {
         text += `\nDescription: ${board.attributes.description}`;
@@ -100,7 +102,7 @@ export async function createBoard(
   args: unknown
 ): Promise<{ content: Array<{ type: string; text: string }> }> {
   try {
-    const params = CreateBoardSchema.parse(args);
+    const params = CreateBoardSchema.parse(args || {});
     
     const boardData = {
       data: {

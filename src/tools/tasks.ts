@@ -24,7 +24,7 @@ export async function listTasksTool(
   args: unknown
 ): Promise<{ content: Array<{ type: string; text: string }> }> {
   try {
-    const params = listTasksSchema.parse(args);
+    const params = listTasksSchema.parse(args || {});
     
     const response = await client.listTasks({
       project_id: params.project_id,
@@ -33,7 +33,7 @@ export async function listTasksTool(
       limit: params.limit,
     });
     
-    if (!response.data || response.data.length === 0) {
+    if (!response || !response.data || response.data.length === 0) {
       return {
         content: [{
           type: 'text',
@@ -42,7 +42,7 @@ export async function listTasksTool(
       };
     }
     
-    const tasksText = response.data.map(task => {
+    const tasksText = response.data.filter(task => task && task.attributes).map(task => {
       const projectId = task.relationships?.project?.data?.id;
       const assigneeId = task.relationships?.assignee?.data?.id;
       const statusText = task.attributes.status === 1 ? 'open' : task.attributes.status === 2 ? 'closed' : `status ${task.attributes.status}`;
@@ -90,7 +90,7 @@ export async function getProjectTasksTool(
       limit: 200, // Get maximum tasks for a project
     });
     
-    if (!response.data || response.data.length === 0) {
+    if (!response || !response.data || response.data.length === 0) {
       return {
         content: [{
           type: 'text',
@@ -99,7 +99,7 @@ export async function getProjectTasksTool(
       };
     }
     
-    const tasksText = response.data.map(task => {
+    const tasksText = response.data.filter(task => task && task.attributes).map(task => {
       const assigneeId = task.relationships?.assignee?.data?.id;
       const statusText = task.attributes.status === 1 ? 'open' : task.attributes.status === 2 ? 'closed' : `status ${task.attributes.status}`;
       return `• ${task.attributes.title} (ID: ${task.id})
@@ -314,7 +314,7 @@ export async function createTaskTool(
   config?: { PRODUCTIVE_USER_ID?: string }
 ): Promise<{ content: Array<{ type: string; text: string }> }> {
   try {
-    const params = createTaskSchema.parse(args);
+    const params = createTaskSchema.parse(args || {});
     
     // Handle "me" reference for assignee
     let assigneeId = params.assignee_id;
@@ -571,5 +571,108 @@ export const updateTaskAssignmentDefinition = {
       },
     },
     required: ['task_id', 'assignee_id'],
+  },
+};
+
+const updateTaskDetailsSchema = z.object({
+  task_id: z.string().min(1, 'Task ID is required'),
+  title: z.string().min(1, 'Task title cannot be empty').optional(),
+  description: z.string().optional(),
+});
+
+export async function updateTaskDetailsTool(
+  client: ProductiveAPIClient,
+  args: unknown
+): Promise<{ content: Array<{ type: string; text: string }> }> {
+  try {
+    const params = updateTaskDetailsSchema.parse(args);
+    
+    // Ensure at least one field is being updated
+    if (!params.title && params.description === undefined) {
+      throw new McpError(
+        ErrorCode.InvalidParams,
+        'At least one field (title or description) must be provided for update'
+      );
+    }
+    
+    const taskUpdate: ProductiveTaskUpdate = {
+      data: {
+        type: 'tasks',
+        id: params.task_id,
+        attributes: {}
+      }
+    };
+    
+    // Only include fields that are being updated
+    if (params.title) {
+      taskUpdate.data.attributes!.title = params.title;
+    }
+    
+    if (params.description !== undefined) {
+      taskUpdate.data.attributes!.description = params.description;
+    }
+    
+    const response = await client.updateTask(params.task_id, taskUpdate);
+    
+    let text = `Task details updated successfully!\n`;
+    text += `Task: ${response.data.attributes.title} (ID: ${response.data.id})\n`;
+    
+    if (params.title) {
+      text += `✓ Title updated to: "${response.data.attributes.title}"\n`;
+    }
+    
+    if (params.description !== undefined) {
+      if (response.data.attributes.description) {
+        text += `✓ Description updated to: "${response.data.attributes.description}"\n`;
+      } else {
+        text += `✓ Description cleared\n`;
+      }
+    }
+    
+    if (response.data.attributes.updated_at) {
+      text += `Updated at: ${response.data.attributes.updated_at}`;
+    }
+    
+    return {
+      content: [{
+        type: 'text',
+        text: text,
+      }],
+    };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      throw new McpError(
+        ErrorCode.InvalidParams,
+        `Invalid parameters: ${error.errors.map(e => e.message).join(', ')}`
+      );
+    }
+    
+    throw new McpError(
+      ErrorCode.InternalError,
+      error instanceof Error ? error.message : 'Unknown error occurred'
+    );
+  }
+}
+
+export const updateTaskDetailsDefinition = {
+  name: 'update_task_details',
+  description: 'Update the title (name) and/or description of an existing task. At least one field must be provided.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      task_id: {
+        type: 'string',
+        description: 'ID of the task to update (required)',
+      },
+      title: {
+        type: 'string',
+        description: 'New title/name for the task (optional, but cannot be empty if provided)',
+      },
+      description: {
+        type: 'string',
+        description: 'New description for the task (optional, use empty string to clear description)',
+      },
+    },
+    required: ['task_id'],
   },
 };

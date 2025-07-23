@@ -12,14 +12,14 @@ export async function listCompaniesTool(
   args: unknown
 ): Promise<{ content: Array<{ type: string; text: string }> }> {
   try {
-    const params = listCompaniesSchema.parse(args);
+    const params = listCompaniesSchema.parse(args || {});
     
     const response = await client.listCompanies({
       status: params.status,
       limit: params.limit,
     });
     
-    if (!response.data || response.data.length === 0) {
+    if (!response || !response.data || response.data.length === 0) {
       return {
         content: [{
           type: 'text',
@@ -28,7 +28,7 @@ export async function listCompaniesTool(
       };
     }
     
-    const companiesText = response.data.map(company => {
+    const companiesText = response.data.filter(company => company && company.attributes).map(company => {
       const tags = company.attributes.tag_list?.length 
         ? `Tags: ${company.attributes.tag_list.join(', ')}` 
         : '';

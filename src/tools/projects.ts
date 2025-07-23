@@ -13,7 +13,7 @@ export async function listProjectsTool(
   args: unknown
 ): Promise<{ content: Array<{ type: string; text: string }> }> {
   try {
-    const params = listProjectsSchema.parse(args);
+    const params = listProjectsSchema.parse(args || {});
     
     const response = await client.listProjects({
       status: params.status,
@@ -21,7 +21,7 @@ export async function listProjectsTool(
       limit: params.limit,
     });
     
-    if (!response.data || response.data.length === 0) {
+    if (!response || !response.data || response.data.length === 0) {
       return {
         content: [{
           type: 'text',
@@ -30,7 +30,7 @@ export async function listProjectsTool(
       };
     }
     
-    const projectsText = response.data.map(project => {
+    const projectsText = response.data.filter(project => project && project.attributes).map(project => {
       const companyId = project.relationships?.company?.data?.id;
       return `• ${project.attributes.name} (ID: ${project.id})
   Status: ${project.attributes.status}

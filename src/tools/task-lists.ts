@@ -12,23 +12,24 @@ export async function listTaskLists(
   args: unknown
 ): Promise<{ content: Array<{ type: string; text: string }> }> {
   try {
-    const params = ListTaskListsSchema.parse(args);
+    const params = ListTaskListsSchema.parse(args || {});
     
     const response = await client.listTaskLists({
       board_id: params.board_id,
       limit: params.limit,
     });
     
-    if (!response.data || response.data.length === 0) {
+    if (!response || !response.data || response.data.length === 0) {
+      const filterText = params.board_id ? ` for board ${params.board_id}` : '';
       return {
         content: [{
           type: 'text',
-          text: 'No task lists found',
+          text: `No task lists found${filterText}`,
         }],
       };
     }
     
-    const taskListsText = response.data.map(taskList => {
+    const taskListsText = response.data.filter(taskList => taskList && taskList.attributes).map(taskList => {
       let text = `Task List: ${taskList.attributes.name} (ID: ${taskList.id})`;
       if (taskList.attributes.description) {
         text += `\nDescription: ${taskList.attributes.description}`;

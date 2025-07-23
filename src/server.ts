@@ -4,12 +4,11 @@ import { CallToolRequestSchema, ListToolsRequestSchema, ListPromptsRequestSchema
 import { getConfig } from './config/index.js';
 import { ProductiveAPIClient } from './api/client.js';
 import { listProjectsTool, listProjectsDefinition } from './tools/projects.js';
-import { listTasksTool, getProjectTasksTool, getTaskTool, createTaskTool, updateTaskAssignmentTool, listTasksDefinition, getProjectTasksDefinition, getTaskDefinition, createTaskDefinition, updateTaskAssignmentDefinition } from './tools/tasks.js';
+import { listTasksTool, getProjectTasksTool, getTaskTool, createTaskTool, updateTaskAssignmentTool, updateTaskDetailsTool, listTasksDefinition, getProjectTasksDefinition, getTaskDefinition, createTaskDefinition, updateTaskAssignmentDefinition, updateTaskDetailsDefinition } from './tools/tasks.js';
 import { listCompaniesTool, listCompaniesDefinition } from './tools/companies.js';
 import { myTasksTool, myTasksDefinition } from './tools/my-tasks.js';
 import { listBoards, createBoard, listBoardsTool, createBoardTool } from './tools/boards.js';
 import { listTaskLists, createTaskList, listTaskListsTool, createTaskListTool } from './tools/task-lists.js';
-import { listPeople, getProjectPeople, listPeopleTool, getProjectPeopleTool } from './tools/people.js';
 import { whoAmI, whoAmITool } from './tools/whoami.js';
 import { listActivities, listActivitiesTool } from './tools/activities.js';
 import { getRecentUpdates, getRecentUpdatesTool } from './tools/recent-updates.js';
@@ -57,12 +56,11 @@ export async function createServer() {
       getTaskDefinition,
       createTaskDefinition,
       updateTaskAssignmentDefinition,
+      updateTaskDetailsDefinition,
       addTaskCommentDefinition,
       updateTaskStatusDefinition,
       listWorkflowStatusesDefinition,
       myTasksDefinition,
-      listPeopleTool,
-      getProjectPeopleTool,
       listActivitiesTool,
       getRecentUpdatesTool,
       listTimeEntriesDefinition,
@@ -114,6 +112,9 @@ export async function createServer() {
       case 'update_task_assignment':
         return await updateTaskAssignmentTool(apiClient, args, config);
         
+      case 'update_task_details':
+        return await updateTaskDetailsTool(apiClient, args);
+        
       case 'add_task_comment':
         return await addTaskCommentTool(apiClient, args);
         
@@ -128,12 +129,6 @@ export async function createServer() {
         
       case 'create_task_list':
         return await createTaskList(apiClient, args);
-        
-      case 'list_people':
-        return await listPeople(apiClient, args);
-        
-      case 'get_project_people':
-        return await getProjectPeople(apiClient, args);
         
       case 'list_activities':
         return await listActivities(apiClient, args);
