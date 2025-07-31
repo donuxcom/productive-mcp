@@ -521,3 +521,13 @@ export interface ProductiveError {
     };
   }>;
 }
+
+/**
+ * Task reposition interface for Productive API
+ * Used when repositioning tasks in a task list
+ */
+export interface TaskReposition {
+  move_before_id?: string; // Move task before specified task ID
+  move_after_id?: string;  // Move task after specified task ID
+  placement?: number;      // Legacy parameter, not recommended
+}

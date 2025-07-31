@@ -1,6 +1,7 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema, ListPromptsRequestSchema, GetPromptRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import { z } from 'zod';
 import { getConfig } from './config/index.js';
 import { ProductiveAPIClient } from './api/client.js';
 import { listProjectsTool, listProjectsDefinition } from './tools/projects.js';
@@ -19,6 +20,7 @@ import { listTimeEntresTool, createTimeEntryTool, listServicesTool, getProjectSe
 import { updateTaskSprint, updateTaskSprintTool } from './tools/task-sprint.js';
 import { moveTaskToList, moveTaskToListTool } from './tools/task-list-move.js';
 import { addToBacklog, addToBacklogTool } from './tools/task-backlog.js';
+import { taskRepositionTool, taskRepositionDefinition, taskRepositionSchema } from './tools/task-reposition.js';
 import { generateTimesheetPrompt, timesheetPromptDefinition, generateQuickTimesheetPrompt, quickTimesheetPromptDefinition } from './prompts/timesheet.js';
 
 export async function createServer() {
@@ -72,6 +74,7 @@ export async function createServer() {
       updateTaskSprintTool,
       moveTaskToListTool,
       addToBacklogTool,
+      taskRepositionDefinition,
     ],
   }));
   
@@ -162,6 +165,13 @@ export async function createServer() {
         
       case 'add_to_backlog':
         return await addToBacklog(apiClient, args);
+        
+      case 'reposition_task':
+        // Ensure args has the required taskId property
+        if (!args?.taskId) {
+          throw new Error('taskId is required for task repositioning');
+        }
+        return await taskRepositionTool(apiClient, args as z.infer<typeof taskRepositionSchema>);
         
       default:
         throw new Error(`Unknown tool: ${name}`);

@@ -694,4 +694,80 @@ export class ProductiveAPIClient {
       ...additionalParams
     });
   }
+
+  /**
+   * Reposition a task in a task list
+   * 
+   * @param taskId - ID of the task to reposition
+   * @param attributes - Positioning attributes (move_before_id and/or move_after_id)
+   * @returns Promise resolving to the task response
+   * 
+   * @example
+   * // Position task 1 after task 2
+   * await client.repositionTask('1', { move_after_id: '2' });
+   * 
+   * // Position task 3 between tasks 1 and 2
+   * await client.repositionTask('3', { move_after_id: '1', move_before_id: '2' });
+   */
+  async repositionTask(
+    taskId: string, 
+    attributes: { 
+      move_before_id?: string; 
+      move_after_id?: string;
+      placement?: number;
+    }
+  ): Promise<any> {
+    const requestBody = {
+      data: {
+        type: 'tasks',
+        attributes: { ...attributes }
+      }
+    };
+
+    // The reposition endpoint returns 204 No Content on success
+    const url = `${this.config.PRODUCTIVE_API_BASE_URL}tasks/${taskId}/reposition`;
+    
+    try {
+      const response = await fetch(url, {
+        method: 'PATCH',
+        headers: {
+          'X-Auth-Token': this.config.PRODUCTIVE_API_TOKEN,
+          'X-Organization-Id': this.config.PRODUCTIVE_ORG_ID,
+          'Content-Type': 'application/vnd.api+json',
+        },
+        body: JSON.stringify(requestBody),
+      });
+      
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error(`Task ${taskId} not found or cannot be repositioned.`);
+        }
+        throw new Error(`Reposition failed with status ${response.status}: ${response.statusText}`);
+      }
+      
+      // If 204 No Content (success), return a minimal success response
+      if (response.status === 204) {
+        return {
+          success: true,
+          taskId: taskId,
+          message: `Task ${taskId} repositioned successfully`
+        };
+      }
+      
+      // For any other success response with content, try to parse JSON
+      try {
+        return await response.json();
+      } catch (e) {
+        // If parsing fails but status was success, return a minimal success object
+        return {
+          success: true,
+          taskId: taskId,
+          message: `Task ${taskId} repositioned successfully`
+        };
+      }
+    } catch (error) {
+      console.error('Error repositioning task:', error);
+      throw error;
+    }
+  }
 }

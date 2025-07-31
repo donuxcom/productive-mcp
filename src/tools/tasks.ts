@@ -139,11 +139,31 @@ export async function getTaskTool(
   try {
     const params = getTaskSchema.parse(args);
     
-    const response = await client.getTask(params.task_id);
+    // Import and use config directly
+    const config = await import('../config/index.js').then(m => m.getConfig());
     
-    const task = response.data;
+    // Create URL with task_list included
+    const url = `${config.PRODUCTIVE_API_BASE_URL}tasks/${params.task_id}?include=task_list`;
+    
+    // Create request with proper headers from config
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'X-Auth-Token': config.PRODUCTIVE_API_TOKEN,
+        'X-Organization-Id': config.PRODUCTIVE_ORG_ID,
+        'Content-Type': 'application/vnd.api+json',
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to get task: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    const task = data.data;
     const projectId = task.relationships?.project?.data?.id;
     const assigneeId = task.relationships?.assignee?.data?.id;
+    const taskListId = task.relationships?.task_list?.data?.id;
     
     // Handle status using the 'closed' field from actual API response
     const statusText = task.attributes.closed === false ? 'open' : task.attributes.closed === true ? 'closed' : 'unknown';
@@ -209,6 +229,20 @@ export async function getTaskTool(
     
     if (task.attributes.last_activity_at) {
       text += `Last Activity: ${task.attributes.last_activity_at}\n`;
+    }
+    
+    // Include task list ID information if available
+    if (taskListId) {
+      text += `Task List ID: ${taskListId}\n`;
+      
+    // If there's included data for the task list, include the name
+    console.log('Included data:', JSON.stringify(data.included));
+    if (data.included && Array.isArray(data.included)) {
+      const taskList = data.included.find((item: any) => item.type === 'task_lists' && item.id === taskListId);
+      if (taskList) {
+        text += `Task List: ${taskList.attributes.name}\n`;
+      }
+    }
     }
     
     return {
