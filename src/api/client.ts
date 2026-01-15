@@ -1,8 +1,8 @@
 import { Config } from '../config/index.js';
-import { 
-  ProductiveCompany, 
-  ProductiveProject, 
-  ProductiveTask, 
+import {
+  ProductiveCompany,
+  ProductiveProject,
+  ProductiveTask,
   ProductiveBoard,
   ProductiveTaskList,
   ProductivePerson,
@@ -12,7 +12,8 @@ import {
   ProductiveService,
   ProductiveTimeEntry,
   ProductiveDeal,
-  ProductiveResponse, 
+  ProductivePage,
+  ProductiveResponse,
   ProductiveSingleResponse,
   ProductiveTaskCreate,
   ProductiveTaskUpdate,
@@ -20,7 +21,7 @@ import {
   ProductiveTaskListCreate,
   ProductiveCommentCreate,
   ProductiveTimeEntryCreate,
-  ProductiveError 
+  ProductiveError
 } from './types.js';
 
 export class ProductiveAPIClient {
@@ -131,34 +132,44 @@ export class ProductiveAPIClient {
     status?: 'open' | 'closed';
     limit?: number;
     page?: number;
+    sort?: string;
+    include?: string[];
   }): Promise<ProductiveResponse<ProductiveTask>> {
     const queryParams = new URLSearchParams();
-    
+
     if (params?.project_id) {
       queryParams.append('filter[project_id]', params.project_id);
     }
-    
+
     if (params?.assignee_id) {
       queryParams.append('filter[assignee_id]', params.assignee_id);
     }
-    
+
     if (params?.status) {
       // Convert status names to integers: open = 1, closed = 2
       const statusValue = params.status === 'open' ? '1' : '2';
       queryParams.append('filter[status]', statusValue);
     }
-    
+
     if (params?.limit) {
       queryParams.append('page[size]', params.limit.toString());
     }
-    
+
     if (params?.page) {
       queryParams.append('page[number]', params.page.toString());
     }
-    
+
+    if (params?.sort) {
+      queryParams.append('sort', params.sort);
+    }
+
+    if (params?.include && params.include.length > 0) {
+      queryParams.append('include', params.include.join(','));
+    }
+
     const queryString = queryParams.toString();
     const path = `tasks${queryString ? `?${queryString}` : ''}`;
-    
+
     return this.makeRequest<ProductiveResponse<ProductiveTask>>(path);
   }
   
@@ -344,6 +355,55 @@ export class ProductiveAPIClient {
       method: 'POST',
       body: JSON.stringify(commentData),
     });
+  }
+
+  /**
+   * List comments with optional filters
+   *
+   * @param params - Filter parameters for comments
+   * @param params.task_ids - Array of task IDs to filter by
+   * @param params.project_ids - Array of project IDs to filter by
+   * @param params.limit - Number of results per page
+   * @param params.page - Page number for pagination
+   * @returns Promise resolving to paginated comments response with included creators
+   */
+  async listComments(params?: {
+    task_ids?: string[];
+    project_ids?: string[];
+    limit?: number;
+    page?: number;
+  }): Promise<ProductiveResponse<ProductiveComment>> {
+    const queryParams = new URLSearchParams();
+
+    // Include creator to get author name, and task to get task relationship
+    queryParams.append('include', 'creator,task');
+
+    // Sort by created_at descending to get latest comments first
+    queryParams.append('sort', '-created_at');
+
+    // task_id filter only supports single value, not array
+    // For multiple tasks, filter in calling code instead
+    if (params?.task_ids && params.task_ids.length === 1) {
+      queryParams.append('filter[task_id]', params.task_ids[0]);
+    }
+
+    if (params?.project_ids && params.project_ids.length > 0) {
+      // Use comma-separated format for array filter
+      queryParams.append('filter[project_id]', params.project_ids.join(','));
+    }
+
+    if (params?.limit) {
+      queryParams.append('page[size]', params.limit.toString());
+    }
+
+    if (params?.page) {
+      queryParams.append('page[number]', params.page.toString());
+    }
+
+    const queryString = queryParams.toString();
+    const path = `comments${queryString ? `?${queryString}` : ''}`;
+
+    return this.makeRequest<ProductiveResponse<ProductiveComment>>(path);
   }
 
   async listWorkflowStatuses(params?: {
@@ -769,5 +829,15 @@ export class ProductiveAPIClient {
       console.error('Error repositioning task:', error);
       throw error;
     }
+  }
+
+  /**
+   * Get a specific page/document by ID
+   *
+   * @param pageId - The ID of the page to retrieve
+   * @returns Promise resolving to the page data
+   */
+  async getPage(pageId: string): Promise<ProductiveSingleResponse<ProductivePage>> {
+    return this.makeRequest<ProductiveSingleResponse<ProductivePage>>(`pages/${pageId}?include=project,creator`);
   }
 }

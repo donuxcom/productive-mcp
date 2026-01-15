@@ -7,7 +7,9 @@ import { ProductiveAPIClient } from './api/client.js';
 import { listProjectsTool, listProjectsDefinition } from './tools/projects.js';
 import { listTasksTool, getProjectTasksTool, getTaskTool, createTaskTool, updateTaskAssignmentTool, updateTaskDetailsTool, listTasksDefinition, getProjectTasksDefinition, getTaskDefinition, createTaskDefinition, updateTaskAssignmentDefinition, updateTaskDetailsDefinition } from './tools/tasks.js';
 import { listCompaniesTool, listCompaniesDefinition } from './tools/companies.js';
+import { listPeopleTool, listPeopleDefinition } from './tools/people.js';
 import { myTasksTool, myTasksDefinition } from './tools/my-tasks.js';
+import { taskInboxTool, taskInboxDefinition } from './tools/task-inbox.js';
 import { listBoards, createBoard, listBoardsTool, createBoardTool } from './tools/boards.js';
 import { listTaskLists, createTaskList, listTaskListsTool, createTaskListTool } from './tools/task-lists.js';
 import { whoAmI, whoAmITool } from './tools/whoami.js';
@@ -21,6 +23,7 @@ import { updateTaskSprint, updateTaskSprintTool } from './tools/task-sprint.js';
 import { moveTaskToList, moveTaskToListTool } from './tools/task-list-move.js';
 import { addToBacklog, addToBacklogTool } from './tools/task-backlog.js';
 import { taskRepositionTool, taskRepositionDefinition, taskRepositionSchema } from './tools/task-reposition.js';
+import { getPageTool, getPageDefinition } from './tools/pages.js';
 import { generateTimesheetPrompt, timesheetPromptDefinition, generateQuickTimesheetPrompt, quickTimesheetPromptDefinition } from './prompts/timesheet.js';
 
 export async function createServer() {
@@ -48,6 +51,7 @@ export async function createServer() {
     tools: [
       whoAmITool,
       listCompaniesDefinition,
+      listPeopleDefinition,
       listProjectsDefinition,
       listBoardsTool,
       createBoardTool,
@@ -63,6 +67,7 @@ export async function createServer() {
       updateTaskStatusDefinition,
       listWorkflowStatusesDefinition,
       myTasksDefinition,
+      taskInboxDefinition,
       listActivitiesTool,
       getRecentUpdatesTool,
       listTimeEntriesDefinition,
@@ -75,6 +80,7 @@ export async function createServer() {
       moveTaskToListTool,
       addToBacklogTool,
       taskRepositionDefinition,
+      getPageDefinition,
     ],
   }));
   
@@ -87,7 +93,10 @@ export async function createServer() {
         
       case 'list_companies':
         return await listCompaniesTool(apiClient, args);
-        
+
+      case 'list_people':
+        return await listPeopleTool(apiClient, args);
+
       case 'list_projects':
         return await listProjectsTool(apiClient, args);
         
@@ -102,7 +111,10 @@ export async function createServer() {
         
       case 'my_tasks':
         return await myTasksTool(apiClient, config, args);
-        
+
+      case 'task_inbox':
+        return await taskInboxTool(apiClient, config, args);
+
       case 'list_boards':
         return await listBoards(apiClient, args);
         
@@ -172,7 +184,10 @@ export async function createServer() {
           throw new Error('taskId is required for task repositioning');
         }
         return await taskRepositionTool(apiClient, args as z.infer<typeof taskRepositionSchema>);
-        
+
+      case 'get_page':
+        return await getPageTool(apiClient, args);
+
       default:
         throw new Error(`Unknown tool: ${name}`);
     }

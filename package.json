@@ -4,16 +4,18 @@
   "type": "module",
   "main": "./build/index.js",
   "bin": {
-    "productive-mcp": "./build/index.js"
+    "productive-mcp": "./build/index.js",
+    "productive-inbox": "./build/cli/inbox.js"
   },
   "files": [
     "build",
     "README.md"
   ],
   "scripts": {
-    "build": "tsc && chmod +x build/index.js",
+    "build": "tsc && chmod +x build/index.js && chmod +x build/cli/inbox.js",
     "dev": "tsc --watch",
     "start": "node build/index.js",
+    "inbox": "node build/cli/inbox.js",
     "prepublishOnly": "npm run build",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
