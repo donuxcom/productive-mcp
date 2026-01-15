@@ -8,11 +8,13 @@ const listTasksSchema = z.object({
   assignee_id: z.string().optional(),
   status: z.enum(['open', 'closed']).optional(),
   limit: z.number().min(1).max(200).default(30).optional(),
+  top_level_only: z.boolean().optional(),
 });
 
 const getProjectTasksSchema = z.object({
   project_id: z.string().min(1, 'Project ID is required'),
   status: z.enum(['open', 'closed']).optional(),
+  top_level_only: z.boolean().optional(),
 });
 
 const getTaskSchema = z.object({
@@ -31,8 +33,9 @@ export async function listTasksTool(
       assignee_id: params.assignee_id,
       status: params.status,
       limit: params.limit,
+      include: ['assignee', 'parent_task'],
     });
-    
+
     if (!response || !response.data || response.data.length === 0) {
       return {
         content: [{
@@ -41,20 +44,62 @@ export async function listTasksTool(
         }],
       };
     }
-    
-    const tasksText = response.data.filter(task => task && task.attributes).map(task => {
+
+    // Build a map of person IDs to names from included data
+    const personMap = new Map<string, string>();
+    // Build a map of task IDs to titles for parent tasks
+    const taskTitleMap = new Map<string, string>();
+    if (response.included && Array.isArray(response.included)) {
+      response.included.forEach((item: any) => {
+        if (item.type === 'people') {
+          const firstName = item.attributes.first_name || '';
+          const lastName = item.attributes.last_name || '';
+          const fullName = `${firstName} ${lastName}`.trim();
+          if (fullName) {
+            personMap.set(item.id, fullName);
+          }
+        } else if (item.type === 'tasks') {
+          taskTitleMap.set(item.id, item.attributes.title);
+        }
+      });
+    }
+
+    // Filter tasks based on top_level_only parameter
+    let filteredTasks = response.data.filter(task => task && task.attributes);
+    if (params.top_level_only) {
+      filteredTasks = filteredTasks.filter(task => !task.relationships?.parent_task?.data?.id);
+    }
+
+    if (filteredTasks.length === 0) {
+      return {
+        content: [{
+          type: 'text',
+          text: params.top_level_only
+            ? 'No top-level tasks found matching the criteria (all tasks are subtasks).'
+            : 'No tasks found matching the criteria.',
+        }],
+      };
+    }
+
+    const tasksText = filteredTasks.map(task => {
       const projectId = task.relationships?.project?.data?.id;
       const assigneeId = task.relationships?.assignee?.data?.id;
+      const parentTaskId = task.relationships?.parent_task?.data?.id;
+      const assigneeName = assigneeId ? personMap.get(assigneeId) : undefined;
+      const parentTaskTitle = parentTaskId ? taskTitleMap.get(parentTaskId) : undefined;
       const statusText = task.attributes.status === 1 ? 'open' : task.attributes.status === 2 ? 'closed' : `status ${task.attributes.status}`;
+      const taskType = parentTaskId ? `Subtask of: ${parentTaskTitle || parentTaskId}` : 'Top-level task';
       return `• ${task.attributes.title} (ID: ${task.id})
   Status: ${statusText}
+  Type: ${taskType}
   ${task.attributes.due_date ? `Due: ${task.attributes.due_date}` : 'No due date'}
   ${projectId ? `Project ID: ${projectId}` : ''}
-  ${assigneeId ? `Assignee ID: ${assigneeId}` : 'Unassigned'}
+  ${assigneeId ? `Assignee: ${assigneeName || 'Unknown'} (ID: ${assigneeId})` : 'Unassigned'}
   ${task.attributes.description ? `Description: ${task.attributes.description}` : ''}`;
     }).join('\n\n');
-    
-    const summary = `Found ${response.data.length} task${response.data.length !== 1 ? 's' : ''}${response.meta?.total_count ? ` (showing ${response.data.length} of ${response.meta.total_count})` : ''}:\n\n${tasksText}`;
+
+    const filterNote = params.top_level_only ? ' (top-level only)' : '';
+    const summary = `Found ${filteredTasks.length} task${filteredTasks.length !== 1 ? 's' : ''}${filterNote}${response.meta?.total_count ? ` (from ${response.meta.total_count} total)` : ''}:\n\n${tasksText}`;
     
     return {
       content: [{
@@ -88,8 +133,9 @@ export async function getProjectTasksTool(
       project_id: params.project_id,
       status: params.status,
       limit: 200, // Get maximum tasks for a project
+      include: ['assignee', 'parent_task'],
     });
-    
+
     if (!response || !response.data || response.data.length === 0) {
       return {
         content: [{
@@ -98,18 +144,60 @@ export async function getProjectTasksTool(
         }],
       };
     }
-    
-    const tasksText = response.data.filter(task => task && task.attributes).map(task => {
+
+    // Build a map of person IDs to names from included data
+    const personMap = new Map<string, string>();
+    // Build a map of task IDs to titles for parent tasks
+    const taskTitleMap = new Map<string, string>();
+    if (response.included && Array.isArray(response.included)) {
+      response.included.forEach((item: any) => {
+        if (item.type === 'people') {
+          const firstName = item.attributes.first_name || '';
+          const lastName = item.attributes.last_name || '';
+          const fullName = `${firstName} ${lastName}`.trim();
+          if (fullName) {
+            personMap.set(item.id, fullName);
+          }
+        } else if (item.type === 'tasks') {
+          taskTitleMap.set(item.id, item.attributes.title);
+        }
+      });
+    }
+
+    // Filter tasks based on top_level_only parameter
+    let filteredTasks = response.data.filter(task => task && task.attributes);
+    if (params.top_level_only) {
+      filteredTasks = filteredTasks.filter(task => !task.relationships?.parent_task?.data?.id);
+    }
+
+    if (filteredTasks.length === 0) {
+      return {
+        content: [{
+          type: 'text',
+          text: params.top_level_only
+            ? `No top-level tasks found for project ${params.project_id} (all tasks are subtasks).`
+            : `No tasks found for project ${params.project_id}.`,
+        }],
+      };
+    }
+
+    const tasksText = filteredTasks.map(task => {
       const assigneeId = task.relationships?.assignee?.data?.id;
+      const parentTaskId = task.relationships?.parent_task?.data?.id;
+      const assigneeName = assigneeId ? personMap.get(assigneeId) : undefined;
+      const parentTaskTitle = parentTaskId ? taskTitleMap.get(parentTaskId) : undefined;
       const statusText = task.attributes.status === 1 ? 'open' : task.attributes.status === 2 ? 'closed' : `status ${task.attributes.status}`;
+      const taskType = parentTaskId ? `Subtask of: ${parentTaskTitle || parentTaskId}` : 'Top-level task';
       return `• ${task.attributes.title} (ID: ${task.id})
   Status: ${statusText}
+  Type: ${taskType}
   ${task.attributes.due_date ? `Due: ${task.attributes.due_date}` : 'No due date'}
-  ${assigneeId ? `Assignee ID: ${assigneeId}` : 'Unassigned'}
+  ${assigneeId ? `Assignee: ${assigneeName || 'Unknown'} (ID: ${assigneeId})` : 'Unassigned'}
   ${task.attributes.description ? `Description: ${task.attributes.description}` : ''}`;
     }).join('\n\n');
-    
-    const summary = `Project ${params.project_id} has ${response.data.length} task${response.data.length !== 1 ? 's' : ''}:\n\n${tasksText}`;
+
+    const filterNote = params.top_level_only ? ' (top-level only)' : '';
+    const summary = `Project ${params.project_id} has ${filteredTasks.length} task${filteredTasks.length !== 1 ? 's' : ''}${filterNote}:\n\n${tasksText}`;
     
     return {
       content: [{
@@ -142,8 +230,8 @@ export async function getTaskTool(
     // Import and use config directly
     const config = await import('../config/index.js').then(m => m.getConfig());
     
-    // Create URL with task_list included
-    const url = `${config.PRODUCTIVE_API_BASE_URL}tasks/${params.task_id}?include=task_list`;
+    // Create URL with task_list, assignee, and parent_task included
+    const url = `${config.PRODUCTIVE_API_BASE_URL}tasks/${params.task_id}?include=task_list,assignee,parent_task`;
     
     // Create request with proper headers from config
     const response = await fetch(url, {
@@ -164,6 +252,7 @@ export async function getTaskTool(
     const projectId = task.relationships?.project?.data?.id;
     const assigneeId = task.relationships?.assignee?.data?.id;
     const taskListId = task.relationships?.task_list?.data?.id;
+    const parentTaskId = task.relationships?.parent_task?.data?.id;
     
     // Handle status using the 'closed' field from actual API response
     const statusText = task.attributes.closed === false ? 'open' : task.attributes.closed === true ? 'closed' : 'unknown';
@@ -189,10 +278,37 @@ export async function getTaskTool(
     
     if (assigneeId) {
       text += `Assignee ID: ${assigneeId}\n`;
+      // Look for assignee name in included data
+      if (data.included && Array.isArray(data.included)) {
+        const assignee = data.included.find((item: any) => item.type === 'people' && item.id === assigneeId);
+        if (assignee) {
+          const firstName = assignee.attributes.first_name || '';
+          const lastName = assignee.attributes.last_name || '';
+          const fullName = `${firstName} ${lastName}`.trim();
+          if (fullName) {
+            text += `Assignee: ${fullName}\n`;
+          }
+        }
+      }
     } else {
       text += `Assignee: Unassigned\n`;
     }
-    
+
+    // Parent task info (for subtasks)
+    if (parentTaskId) {
+      text += `Parent Task ID: ${parentTaskId}\n`;
+      // Look for parent task title in included data
+      if (data.included && Array.isArray(data.included)) {
+        const parentTask = data.included.find((item: any) => item.type === 'tasks' && item.id === parentTaskId);
+        if (parentTask) {
+          text += `Parent Task: ${parentTask.attributes.title}\n`;
+        }
+      }
+      text += `Type: Subtask\n`;
+    } else {
+      text += `Type: Top-level task\n`;
+    }
+
     if (task.attributes.created_at) {
       text += `Created: ${task.attributes.created_at}\n`;
     }
@@ -268,7 +384,7 @@ export async function getTaskTool(
 
 export const listTasksDefinition = {
   name: 'list_tasks',
-  description: 'Get a list of tasks from Productive.io',
+  description: 'Get a list of tasks from Productive.io. Returns task hierarchy info (parent task) and can filter to show only top-level tasks.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -292,13 +408,17 @@ export const listTasksDefinition = {
         maximum: 200,
         default: 30,
       },
+      top_level_only: {
+        type: 'boolean',
+        description: 'If true, only return top-level tasks (exclude subtasks). Default: false (return all tasks including subtasks)',
+      },
     },
   },
 };
 
 export const getProjectTasksDefinition = {
   name: 'get_project_tasks',
-  description: 'Get all tasks for a specific project. ALSO used as STEP 4 in timesheet workflow to find task_id for linking time entries to specific tasks. Workflow: list_projects → list_project_deals → list_deal_services → get_project_tasks → create_time_entry.',
+  description: 'Get all tasks for a specific project. Returns task hierarchy info (parent task) and can filter to show only top-level tasks. ALSO used as STEP 4 in timesheet workflow to find task_id for linking time entries to specific tasks. Workflow: list_projects → list_project_deals → list_deal_services → get_project_tasks → create_time_entry.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -310,6 +430,10 @@ export const getProjectTasksDefinition = {
         type: 'string',
         enum: ['open', 'closed'],
         description: 'Filter by task status (open or closed)',
+      },
+      top_level_only: {
+        type: 'boolean',
+        description: 'If true, only return top-level tasks (exclude subtasks). Default: false (return all tasks including subtasks)',
       },
     },
     required: ['project_id'],

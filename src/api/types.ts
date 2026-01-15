@@ -73,6 +73,12 @@ export interface ProductiveTask {
 
 export interface ProductiveResponse<T> {
   data: T[];
+  included?: Array<{
+    id: string;
+    type: string;
+    attributes: Record<string, any>;
+    relationships?: Record<string, any>;
+  }>;
   links?: {
     first?: string;
     last?: string;
@@ -530,4 +536,50 @@ export interface TaskReposition {
   move_before_id?: string; // Move task before specified task ID
   move_after_id?: string;  // Move task after specified task ID
   placement?: number;      // Legacy parameter, not recommended
+}
+
+/**
+ * Page/Document entity interface for Productive API
+ * Represents docs/pages in Productive.io
+ */
+export interface ProductivePage {
+  id: string;
+  type: 'pages';
+  attributes: {
+    title: string;
+    body: string;
+    created_at: string;
+    edited_at?: string;
+    updated_at: string;
+    cover_image_url?: string;
+    icon_id?: string;
+    position?: number;
+    public?: boolean;
+    public_uuid?: string;
+    parent_page_id?: string;
+    root_page_id?: string;
+    version_number?: number;
+    [key: string]: any;
+  };
+  relationships?: {
+    project?: {
+      data: {
+        id: string;
+        type: 'projects';
+      } | null;
+    };
+    creator?: {
+      data: {
+        id: string;
+        type: 'people';
+      } | null;
+    };
+    parent_page?: {
+      data: {
+        id: string;
+        type: 'pages';
+      } | null;
+    };
+    [key: string]: any;
+  };
 }

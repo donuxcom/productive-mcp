@@ -6,6 +6,7 @@ import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 const myTasksSchema = z.object({
   status: z.enum(['open', 'closed']).optional(),
   limit: z.number().min(1).max(200).default(30).optional(),
+  top_level_only: z.boolean().optional(),
 });
 
 export async function myTasksTool(
@@ -30,8 +31,9 @@ export async function myTasksTool(
       assignee_id: config.PRODUCTIVE_USER_ID,
       status: params.status,
       limit: params.limit,
+      include: ['parent_task'],
     });
-    
+
     if (!response || !response.data || response.data.length === 0) {
       return {
         content: [{
@@ -40,20 +42,52 @@ export async function myTasksTool(
         }],
       };
     }
-    
-    const tasksText = response.data.filter(task => task && task.attributes).map(task => {
+
+    // Build a map of task IDs to titles for parent tasks
+    const taskTitleMap = new Map<string, string>();
+    if (response.included && Array.isArray(response.included)) {
+      response.included.forEach((item: any) => {
+        if (item.type === 'tasks') {
+          taskTitleMap.set(item.id, item.attributes.title);
+        }
+      });
+    }
+
+    // Filter tasks based on top_level_only parameter
+    let filteredTasks = response.data.filter(task => task && task.attributes);
+    if (params.top_level_only) {
+      filteredTasks = filteredTasks.filter(task => !task.relationships?.parent_task?.data?.id);
+    }
+
+    if (filteredTasks.length === 0) {
+      return {
+        content: [{
+          type: 'text',
+          text: params.top_level_only
+            ? 'You have no top-level tasks assigned to you (all your tasks are subtasks).'
+            : 'You have no tasks assigned to you.',
+        }],
+      };
+    }
+
+    const tasksText = filteredTasks.map(task => {
       const projectId = task.relationships?.project?.data?.id;
+      const parentTaskId = task.relationships?.parent_task?.data?.id;
+      const parentTaskTitle = parentTaskId ? taskTitleMap.get(parentTaskId) : undefined;
       const statusIcon = task.attributes.status === 2 ? '✓' : '○';
       const statusText = task.attributes.status === 1 ? 'open' : task.attributes.status === 2 ? 'closed' : `status ${task.attributes.status}`;
-      
+      const taskType = parentTaskId ? `Subtask of: ${parentTaskTitle || parentTaskId}` : 'Top-level task';
+
       return `${statusIcon} ${task.attributes.title} (ID: ${task.id})
   Status: ${statusText}
+  Type: ${taskType}
   ${task.attributes.due_date ? `Due: ${task.attributes.due_date}` : 'No due date'}
   ${projectId ? `Project ID: ${projectId}` : ''}
   ${task.attributes.description ? `Description: ${task.attributes.description}` : ''}`;
     }).join('\n\n');
-    
-    const summary = `You have ${response.data.length} task${response.data.length !== 1 ? 's' : ''} assigned to you${response.meta?.total_count ? ` (showing ${response.data.length} of ${response.meta.total_count})` : ''}:\n\n${tasksText}`;
+
+    const filterNote = params.top_level_only ? ' (top-level only)' : '';
+    const summary = `You have ${filteredTasks.length} task${filteredTasks.length !== 1 ? 's' : ''} assigned to you${filterNote}${response.meta?.total_count ? ` (from ${response.meta.total_count} total)` : ''}:\n\n${tasksText}`;
     
     return {
       content: [{
@@ -78,7 +112,7 @@ export async function myTasksTool(
 
 export const myTasksDefinition = {
   name: 'my_tasks',
-  description: 'Get tasks assigned to you (requires PRODUCTIVE_USER_ID to be configured)',
+  description: 'Get tasks assigned to you (requires PRODUCTIVE_USER_ID to be configured). Returns task hierarchy info and can filter to show only top-level tasks.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -93,6 +127,10 @@ export const myTasksDefinition = {
         minimum: 1,
         maximum: 200,
         default: 30,
+      },
+      top_level_only: {
+        type: 'boolean',
+        description: 'If true, only return top-level tasks (exclude subtasks). Useful when you want to see main tasks without nested subtasks. Default: false',
       },
     },
   },
