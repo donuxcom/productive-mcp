@@ -23,7 +23,7 @@ import { updateTaskSprint, updateTaskSprintTool } from './tools/task-sprint.js';
 import { moveTaskToList, moveTaskToListTool } from './tools/task-list-move.js';
 import { addToBacklog, addToBacklogTool } from './tools/task-backlog.js';
 import { taskRepositionTool, taskRepositionDefinition, taskRepositionSchema } from './tools/task-reposition.js';
-import { getPageTool, getPageDefinition } from './tools/pages.js';
+import { getPageTool, getPageDefinition, createPageTool, createPageDefinition, updatePageTool, updatePageDefinition } from './tools/pages.js';
 import { generateTimesheetPrompt, timesheetPromptDefinition, generateQuickTimesheetPrompt, quickTimesheetPromptDefinition } from './prompts/timesheet.js';
 
 export async function createServer() {
@@ -81,6 +81,8 @@ export async function createServer() {
       addToBacklogTool,
       taskRepositionDefinition,
       getPageDefinition,
+      createPageDefinition,
+      updatePageDefinition,
     ],
   }));
   
@@ -187,6 +189,12 @@ export async function createServer() {
 
       case 'get_page':
         return await getPageTool(apiClient, args);
+
+      case 'create_page':
+        return await createPageTool(apiClient, args);
+
+      case 'update_page':
+        return await updatePageTool(apiClient, args);
 
       default:
         throw new Error(`Unknown tool: ${name}`);

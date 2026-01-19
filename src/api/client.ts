@@ -21,6 +21,8 @@ import {
   ProductiveTaskListCreate,
   ProductiveCommentCreate,
   ProductiveTimeEntryCreate,
+  ProductivePageCreate,
+  ProductivePageUpdate,
   ProductiveError
 } from './types.js';
 
@@ -299,6 +301,7 @@ export class ProductiveAPIClient {
     task_id?: string;
     project_id?: string;
     person_id?: string;
+    creator_id?: string;
     item_type?: string;
     event?: string;
     after?: string; // ISO 8601 date string
@@ -307,17 +310,21 @@ export class ProductiveAPIClient {
     page?: number;
   }): Promise<ProductiveResponse<ProductiveActivity>> {
     const queryParams = new URLSearchParams();
-    
+
     if (params?.task_id) {
       queryParams.append('filter[task_id]', params.task_id);
     }
-    
+
     if (params?.project_id) {
       queryParams.append('filter[project_id]', params.project_id);
     }
-    
+
     if (params?.person_id) {
       queryParams.append('filter[person_id]', params.person_id);
+    }
+
+    if (params?.creator_id) {
+      queryParams.append('filter[creator_id]', params.creator_id);
     }
     
     if (params?.item_type) {
@@ -839,5 +846,35 @@ export class ProductiveAPIClient {
    */
   async getPage(pageId: string): Promise<ProductiveSingleResponse<ProductivePage>> {
     return this.makeRequest<ProductiveSingleResponse<ProductivePage>>(`pages/${pageId}?include=project,creator`);
+  }
+
+  /**
+   * Create a new page/document
+   *
+   * @param pageData - The page creation data
+   * @returns Promise resolving to the created page
+   */
+  async createPage(pageData: ProductivePageCreate): Promise<ProductiveSingleResponse<ProductivePage>> {
+    return this.makeRequest<ProductiveSingleResponse<ProductivePage>>('pages', {
+      method: 'POST',
+      body: JSON.stringify(pageData),
+    });
+  }
+
+  /**
+   * Update an existing page/document
+   *
+   * @param pageId - The ID of the page to update
+   * @param pageData - The page update data
+   * @returns Promise resolving to the updated page
+   *
+   * Note: For a successful page update, it's best to ensure no user has that page open
+   * to avoid sync issues.
+   */
+  async updatePage(pageId: string, pageData: ProductivePageUpdate): Promise<ProductiveSingleResponse<ProductivePage>> {
+    return this.makeRequest<ProductiveSingleResponse<ProductivePage>>(`pages/${pageId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(pageData),
+    });
   }
 }

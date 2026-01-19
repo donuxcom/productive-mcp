@@ -6,6 +6,7 @@ const ListActivitiesRequestSchema = z.object({
   task_id: z.string().optional(),
   project_id: z.string().optional(),
   person_id: z.string().optional(),
+  creator_id: z.string().optional(),
   item_type: z.string().optional(),
   event: z.string().optional(),
   after: z.string().optional(), // ISO 8601 date string
@@ -34,6 +35,7 @@ export async function listActivities(
       task_id: params.task_id,
       project_id: params.project_id,
       person_id: params.person_id,
+      creator_id: params.creator_id,
       item_type: params.item_type,
       event: params.event,
       after,
@@ -121,12 +123,16 @@ export const listActivitiesTool = {
         description: 'Filter activities for a specific task ID',
       },
       project_id: {
-        type: 'string', 
+        type: 'string',
         description: 'Filter activities for a specific project ID',
       },
       person_id: {
         type: 'string',
-        description: 'Filter activities by a specific person/user ID',
+        description: 'Filter activities related to a person entity (changes made ON this person). Use creator_id to filter by who made the changes.',
+      },
+      creator_id: {
+        type: 'string',
+        description: 'Filter activities BY a specific person (their activity feed - changes they made). This is typically what you want for "show me what user X did".',
       },
       item_type: {
         type: 'string',

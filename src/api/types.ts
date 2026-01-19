@@ -529,6 +529,68 @@ export interface ProductiveError {
 }
 
 /**
+ * ProseMirror document node for Productive.io pages
+ * Pages use ProseMirror JSON format for rich text content
+ */
+export interface ProseMirrorNode {
+  type: string;
+  attrs?: Record<string, any>;
+  content?: ProseMirrorNode[];
+  marks?: Array<{ type: string; attrs?: Record<string, any> }>;
+  text?: string;
+}
+
+/**
+ * ProseMirror document structure used by Productive.io pages
+ */
+export interface ProseMirrorDocument {
+  type: 'doc';
+  content: ProseMirrorNode[];
+}
+
+export interface ProductivePageCreate {
+  data: {
+    type: 'pages';
+    attributes: {
+      title: string;
+      body?: ProseMirrorDocument;
+      parent_page_id?: string;
+      root_page_id?: string;
+      cover_image_url?: string;
+      icon_id?: string;
+    };
+    relationships: {
+      project: {
+        data: {
+          id: string;
+          type: 'projects';
+        };
+      };
+      parent_page?: {
+        data: {
+          id: string;
+          type: 'pages';
+        };
+      };
+    };
+  };
+}
+
+export interface ProductivePageUpdate {
+  data: {
+    type: 'pages';
+    id: string;
+    attributes?: {
+      title?: string;
+      body?: ProseMirrorDocument;
+      cover_image_url?: string;
+      icon_id?: string;
+      version_number?: number;
+    };
+  };
+}
+
+/**
  * Task reposition interface for Productive API
  * Used when repositioning tasks in a task list
  */
