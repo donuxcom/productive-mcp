@@ -343,6 +343,7 @@ export interface ProductiveCommentCreate {
     type: 'comments';
     attributes: {
       body: string;
+      hidden?: boolean;
     };
     relationships: {
       task: {

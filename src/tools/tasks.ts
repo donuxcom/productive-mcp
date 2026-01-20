@@ -464,6 +464,8 @@ const createTaskSchema = z.object({
   assignee_id: z.string().optional(),
   due_date: z.string().optional(),
   status: z.enum(['open', 'closed']).optional().default('open'),
+  type_id: z.number().min(1).max(2).optional(),
+  parent_task_id: z.string().optional(),
 });
 
 export async function createTaskTool(
@@ -494,6 +496,7 @@ export async function createTaskTool(
           description: params.description,
           due_date: params.due_date,
           status: params.status === 'open' ? 1 : 2,
+          ...(params.type_id !== undefined && { type_id: params.type_id }),
         },
         relationships: {} as any,
       },
@@ -535,11 +538,27 @@ export async function createTaskTool(
         },
       };
     }
-    
+
+    if (params.parent_task_id) {
+      taskData.data.relationships.parent_task = {
+        data: {
+          id: params.parent_task_id,
+          type: 'tasks' as const,
+        },
+      };
+    }
+
     const response = await client.createTask(taskData);
     
-    let text = `Task created successfully!\n`;
+    const isMilestone = params.type_id === 2;
+    const isSubtask = !!params.parent_task_id;
+    const typeLabel = isMilestone ? 'Milestone' : (isSubtask ? 'Subtask' : 'Task');
+    let text = `${typeLabel} created successfully!\n`;
     text += `Title: ${response.data.attributes.title} (ID: ${response.data.id})`;
+    text += `\nType: ${typeLabel}`;
+    if (isSubtask) {
+      text += `\nParent Task ID: ${params.parent_task_id}`;
+    }
     if (response.data.attributes.description) {
       text += `\nDescription: ${response.data.attributes.description}`;
     }
@@ -590,7 +609,7 @@ export async function createTaskTool(
 
 export const createTaskDefinition = {
   name: 'create_task',
-  description: 'Create a new task in Productive.io. If PRODUCTIVE_USER_ID is configured, you can use "me" to refer to the configured user when assigning.',
+  description: 'Create a new task or milestone in Productive.io. If PRODUCTIVE_USER_ID is configured, you can use "me" to refer to the configured user when assigning.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -626,6 +645,15 @@ export const createTaskDefinition = {
         type: 'string',
         enum: ['open', 'closed'],
         description: 'Task status (default: open)',
+      },
+      type_id: {
+        type: 'number',
+        description: 'Task type: 1 = regular task (default), 2 = milestone',
+        enum: [1, 2],
+      },
+      parent_task_id: {
+        type: 'string',
+        description: 'ID of the parent task to create this as a subtask',
       },
     },
     required: ['title'],

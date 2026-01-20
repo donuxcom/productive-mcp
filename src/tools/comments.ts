@@ -5,6 +5,7 @@ import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 const addTaskCommentSchema = z.object({
   task_id: z.string().min(1, 'Task ID is required'),
   comment: z.string().min(1, 'Comment text is required'),
+  hidden: z.boolean().optional(),
 });
 
 export async function addTaskCommentTool(
@@ -19,6 +20,7 @@ export async function addTaskCommentTool(
         type: 'comments' as const,
         attributes: {
           body: params.comment,
+          ...(params.hidden !== undefined && { hidden: params.hidden }),
         },
         relationships: {
           task: {
@@ -75,6 +77,10 @@ export const addTaskCommentDefinition = {
       comment: {
         type: 'string',
         description: 'Text content of the comment (required)',
+      },
+      hidden: {
+        type: 'boolean',
+        description: 'Set to true to hide comment from clients (default: false, visible to all users)',
       },
     },
     required: ['task_id', 'comment'],
