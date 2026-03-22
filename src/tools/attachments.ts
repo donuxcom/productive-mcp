@@ -94,11 +94,25 @@ const TEXT_CONTENT_TYPES = [
   'application/xml',
   'application/javascript',
   'application/x-yaml',
+  'application/octet-stream', // Often used for .md, .txt etc.
+];
+
+const TEXT_FILE_EXTENSIONS = [
+  '.txt', '.md', '.markdown', '.csv', '.json', '.xml', '.yaml', '.yml',
+  '.html', '.htm', '.js', '.ts', '.py', '.rb', '.sh', '.bash',
+  '.css', '.scss', '.less', '.sql', '.log', '.env', '.ini', '.cfg',
+  '.toml', '.conf', '.properties',
 ];
 
 function isTextContentType(contentType?: string): boolean {
   if (!contentType) return false;
   return TEXT_CONTENT_TYPES.some(t => contentType.startsWith(t));
+}
+
+function isTextFileName(name?: string): boolean {
+  if (!name) return false;
+  const lower = name.toLowerCase();
+  return TEXT_FILE_EXTENSIONS.some(ext => lower.endsWith(ext));
 }
 
 const getAttachmentContentSchema = z.object({
@@ -115,9 +129,16 @@ export async function getAttachmentContentTool(
     const response = await client.getAttachment(params.attachment_id);
     const attachment = response.data;
 
-    let text = `Attachment: ${attachment.attributes.name || 'Unnamed'} (ID: ${attachment.id})\n`;
-    if (attachment.attributes.content_type) {
-      text += `Content-Type: ${attachment.attributes.content_type}\n`;
+    const name = attachment.attributes.name || 'Unnamed';
+    const contentType = attachment.attributes.content_type;
+    const url = attachment.attributes.url;
+
+    // Debug: log attachment details to stderr
+    console.error(`[get_attachment_content] ID: ${attachment.id}, name: ${name}, content_type: ${contentType}, url: ${url}`);
+
+    let text = `Attachment: ${name} (ID: ${attachment.id})\n`;
+    if (contentType) {
+      text += `Content-Type: ${contentType}\n`;
     }
     if (attachment.attributes.size) {
       const sizeKB = (attachment.attributes.size / 1024).toFixed(1);
@@ -127,19 +148,33 @@ export async function getAttachmentContentTool(
       text += `Uploaded: ${attachment.attributes.created_at}\n`;
     }
 
-    if (isTextContentType(attachment.attributes.content_type) && attachment.attributes.url) {
+    // Determine if this is a text file by content_type OR file extension
+    const likelyText = isTextContentType(contentType) || isTextFileName(name);
+
+    if (!url) {
+      text += `\nNo download URL available for this attachment.`;
+    } else if (likelyText) {
       try {
-        const result = await client.fetchAttachmentContent(attachment.attributes.url);
+        const result = await client.fetchAttachmentContent(attachment.id, url);
+        console.error(`[get_attachment_content] fetch result: ok=${result.ok}, status=${result.status}, responseContentType=${result.contentType}, textLength=${result.text.length}`);
+
         if (result.ok) {
-          text += `\n--- Content ---\n${result.text}`;
+          // Final check: if the response is HTML but we expected text, it's likely a login page
+          if (result.contentType?.includes('text/html') && !name.toLowerCase().endsWith('.html')) {
+            text += `\nReceived HTML instead of file content (likely auth issue). Download URL: ${url}`;
+          } else {
+            text += `\n--- Content ---\n${result.text}`;
+          }
         } else {
-          text += `\nCould not fetch content (HTTP ${result.status}). Download URL: ${attachment.attributes.url}`;
+          text += `\nCould not fetch content (HTTP ${result.status}). Download URL: ${url}`;
         }
-      } catch {
-        text += `\nCould not fetch content. Download URL: ${attachment.attributes.url}`;
+      } catch (fetchError) {
+        const errMsg = fetchError instanceof Error ? fetchError.message : String(fetchError);
+        console.error(`[get_attachment_content] fetch error: ${errMsg}`);
+        text += `\nCould not fetch content: ${errMsg}. Download URL: ${url}`;
       }
     } else {
-      text += `\nThis is a binary file. Download URL: ${attachment.attributes.url || 'not available'}`;
+      text += `\nThis is a binary file. Download URL: ${url}`;
     }
 
     return {

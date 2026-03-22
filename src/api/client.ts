@@ -906,34 +906,48 @@ export class ProductiveAPIClient {
     return this.makeRequest<ProductiveSingleResponse<ProductiveAttachment>>(`attachments/${attachmentId}`);
   }
 
-  async fetchAttachmentContent(url: string): Promise<{ ok: boolean; text: string; contentType: string | null; status: number }> {
-    // First try with auth headers (for API URLs)
-    const response = await fetch(url, {
-      headers: {
-        'X-Auth-Token': this.config.PRODUCTIVE_API_TOKEN,
-        'X-Organization-Id': this.config.PRODUCTIVE_ORG_ID,
-      },
-      redirect: 'follow',
-    });
+  async fetchAttachmentContent(attachmentId: string, url: string): Promise<{ ok: boolean; text: string; contentType: string | null; status: number }> {
+    const authHeaders = {
+      'X-Auth-Token': this.config.PRODUCTIVE_API_TOKEN,
+      'X-Organization-Id': this.config.PRODUCTIVE_ORG_ID,
+    };
 
-    const text = await response.text();
-    const contentType = response.headers.get('content-type');
+    // Strategy 1: Try the provided URL with auth headers
+    console.error(`[fetchAttachmentContent] Trying URL with auth: ${url}`);
+    let response = await fetch(url, { headers: authHeaders, redirect: 'follow' });
+    let text = await response.text();
+    let contentType = response.headers.get('content-type');
+    console.error(`[fetchAttachmentContent] URL result: status=${response.status}, contentType=${contentType}, isHTML=${contentType?.includes('text/html')}`);
 
-    // Check if we got an HTML page (likely a login redirect)
-    if (contentType?.includes('text/html') && text.includes('<html')) {
-      // Retry without auth (for presigned URLs that don't need auth)
-      const retryResponse = await fetch(url, { redirect: 'follow' });
-      const retryText = await retryResponse.text();
-      const retryContentType = retryResponse.headers.get('content-type');
-
-      return {
-        ok: retryResponse.ok && !(retryContentType?.includes('text/html') && retryText.includes('<html')),
-        text: retryText,
-        contentType: retryContentType,
-        status: retryResponse.status,
-      };
+    // If we got valid non-HTML content, return it
+    if (response.ok && !(contentType?.includes('text/html') && text.includes('<html'))) {
+      return { ok: true, text, contentType, status: response.status };
     }
 
-    return { ok: response.ok, text, contentType, status: response.status };
+    // Strategy 2: Try the URL without auth (presigned URLs)
+    console.error(`[fetchAttachmentContent] Trying URL without auth: ${url}`);
+    response = await fetch(url, { redirect: 'follow' });
+    text = await response.text();
+    contentType = response.headers.get('content-type');
+    console.error(`[fetchAttachmentContent] No-auth result: status=${response.status}, contentType=${contentType}`);
+
+    if (response.ok && !(contentType?.includes('text/html') && text.includes('<html'))) {
+      return { ok: true, text, contentType, status: response.status };
+    }
+
+    // Strategy 3: Try the API download endpoint
+    const downloadUrl = `${this.config.PRODUCTIVE_API_BASE_URL}attachments/${attachmentId}/download`;
+    console.error(`[fetchAttachmentContent] Trying API download endpoint: ${downloadUrl}`);
+    response = await fetch(downloadUrl, { headers: authHeaders, redirect: 'follow' });
+    text = await response.text();
+    contentType = response.headers.get('content-type');
+    console.error(`[fetchAttachmentContent] API download result: status=${response.status}, contentType=${contentType}`);
+
+    if (response.ok && !(contentType?.includes('text/html') && text.includes('<html'))) {
+      return { ok: true, text, contentType, status: response.status };
+    }
+
+    // All strategies failed
+    return { ok: false, text: `All download strategies failed. Last status: ${response.status}`, contentType, status: response.status };
   }
 }
