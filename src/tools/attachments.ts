@@ -129,12 +129,11 @@ export async function getAttachmentContentTool(
 
     if (isTextContentType(attachment.attributes.content_type) && attachment.attributes.url) {
       try {
-        const fileResponse = await fetch(attachment.attributes.url);
-        if (fileResponse.ok) {
-          const content = await fileResponse.text();
-          text += `\n--- Content ---\n${content}`;
+        const result = await client.fetchAttachmentContent(attachment.attributes.url);
+        if (result.ok) {
+          text += `\n--- Content ---\n${result.text}`;
         } else {
-          text += `\nCould not fetch content (HTTP ${fileResponse.status}). Download URL: ${attachment.attributes.url}`;
+          text += `\nCould not fetch content (HTTP ${result.status}). Download URL: ${attachment.attributes.url}`;
         }
       } catch {
         text += `\nCould not fetch content. Download URL: ${attachment.attributes.url}`;

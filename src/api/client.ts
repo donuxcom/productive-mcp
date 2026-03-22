@@ -905,4 +905,35 @@ export class ProductiveAPIClient {
   async getAttachment(attachmentId: string): Promise<ProductiveSingleResponse<ProductiveAttachment>> {
     return this.makeRequest<ProductiveSingleResponse<ProductiveAttachment>>(`attachments/${attachmentId}`);
   }
+
+  async fetchAttachmentContent(url: string): Promise<{ ok: boolean; text: string; contentType: string | null; status: number }> {
+    // First try with auth headers (for API URLs)
+    const response = await fetch(url, {
+      headers: {
+        'X-Auth-Token': this.config.PRODUCTIVE_API_TOKEN,
+        'X-Organization-Id': this.config.PRODUCTIVE_ORG_ID,
+      },
+      redirect: 'follow',
+    });
+
+    const text = await response.text();
+    const contentType = response.headers.get('content-type');
+
+    // Check if we got an HTML page (likely a login redirect)
+    if (contentType?.includes('text/html') && text.includes('<html')) {
+      // Retry without auth (for presigned URLs that don't need auth)
+      const retryResponse = await fetch(url, { redirect: 'follow' });
+      const retryText = await retryResponse.text();
+      const retryContentType = retryResponse.headers.get('content-type');
+
+      return {
+        ok: retryResponse.ok && !(retryContentType?.includes('text/html') && retryText.includes('<html')),
+        text: retryText,
+        contentType: retryContentType,
+        status: retryResponse.status,
+      };
+    }
+
+    return { ok: response.ok, text, contentType, status: response.status };
+  }
 }
