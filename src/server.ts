@@ -24,6 +24,7 @@ import { moveTaskToList, moveTaskToListTool } from './tools/task-list-move.js';
 import { addToBacklog, addToBacklogTool } from './tools/task-backlog.js';
 import { taskRepositionTool, taskRepositionDefinition, taskRepositionSchema } from './tools/task-reposition.js';
 import { getPageTool, getPageDefinition, createPageTool, createPageDefinition, updatePageTool, updatePageDefinition } from './tools/pages.js';
+import { getTaskAttachmentsTool, getTaskAttachmentsDefinition, getAttachmentContentTool, getAttachmentContentDefinition } from './tools/attachments.js';
 import { generateTimesheetPrompt, timesheetPromptDefinition, generateQuickTimesheetPrompt, quickTimesheetPromptDefinition } from './prompts/timesheet.js';
 
 export async function createServer() {
@@ -83,6 +84,8 @@ export async function createServer() {
       getPageDefinition,
       createPageDefinition,
       updatePageDefinition,
+      getTaskAttachmentsDefinition,
+      getAttachmentContentDefinition,
     ],
   }));
   
@@ -195,6 +198,12 @@ export async function createServer() {
 
       case 'update_page':
         return await updatePageTool(apiClient, args);
+
+      case 'get_task_attachments':
+        return await getTaskAttachmentsTool(apiClient, args);
+
+      case 'get_attachment_content':
+        return await getAttachmentContentTool(apiClient, args);
 
       default:
         throw new Error(`Unknown tool: ${name}`);

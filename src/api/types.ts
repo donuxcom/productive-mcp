@@ -249,6 +249,35 @@ export interface ProductiveTaskUpdate {
   };
 }
 
+export interface ProductiveAttachment {
+  id: string;
+  type: 'attachments';
+  attributes: {
+    name: string;
+    content_type?: string;
+    url?: string;
+    size?: number;
+    created_at: string;
+    updated_at?: string;
+    [key: string]: any;
+  };
+  relationships?: {
+    task?: {
+      data: {
+        id: string;
+        type: 'tasks';
+      };
+    };
+    creator?: {
+      data: {
+        id: string;
+        type: 'people';
+      };
+    };
+    [key: string]: any;
+  };
+}
+
 export interface ProductiveSingleResponse<T> {
   data: T;
 }

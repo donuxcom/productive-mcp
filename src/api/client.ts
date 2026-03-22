@@ -13,6 +13,7 @@ import {
   ProductiveTimeEntry,
   ProductiveDeal,
   ProductivePage,
+  ProductiveAttachment,
   ProductiveResponse,
   ProductiveSingleResponse,
   ProductiveTaskCreate,
@@ -876,5 +877,32 @@ export class ProductiveAPIClient {
       method: 'PATCH',
       body: JSON.stringify(pageData),
     });
+  }
+
+  async listAttachments(params: {
+    task_id: string;
+    limit?: number;
+    page?: number;
+  }): Promise<ProductiveResponse<ProductiveAttachment>> {
+    const queryParams = new URLSearchParams();
+
+    queryParams.append('filter[task_id]', params.task_id);
+
+    if (params.limit) {
+      queryParams.append('page[size]', params.limit.toString());
+    }
+
+    if (params.page) {
+      queryParams.append('page[number]', params.page.toString());
+    }
+
+    const queryString = queryParams.toString();
+    const path = `attachments?${queryString}`;
+
+    return this.makeRequest<ProductiveResponse<ProductiveAttachment>>(path);
+  }
+
+  async getAttachment(attachmentId: string): Promise<ProductiveSingleResponse<ProductiveAttachment>> {
+    return this.makeRequest<ProductiveSingleResponse<ProductiveAttachment>>(`attachments/${attachmentId}`);
   }
 }
