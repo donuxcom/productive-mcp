@@ -131,10 +131,6 @@ export async function getAttachmentContentTool(
 
     const name = attachment.attributes.name || 'Unnamed';
     const contentType = attachment.attributes.content_type;
-    const url = attachment.attributes.url;
-
-    // Debug: log attachment details to stderr
-    console.error(`[get_attachment_content] ID: ${attachment.id}, name: ${name}, content_type: ${contentType}, url: ${url}`);
 
     let text = `Attachment: ${name} (ID: ${attachment.id})\n`;
     if (contentType) {
@@ -151,30 +147,23 @@ export async function getAttachmentContentTool(
     // Determine if this is a text file by content_type OR file extension
     const likelyText = isTextContentType(contentType) || isTextFileName(name);
 
-    if (!url) {
-      text += `\nNo download URL available for this attachment.`;
-    } else if (likelyText) {
+    if (likelyText) {
       try {
-        const result = await client.fetchAttachmentContent(attachment.id, url);
-        console.error(`[get_attachment_content] fetch result: ok=${result.ok}, status=${result.status}, responseContentType=${result.contentType}, textLength=${result.text.length}`);
+        // fetchAttachmentContent ri-fetcha l'attachment per URL fresco
+        const result = await client.fetchAttachmentContent(attachment.id);
 
         if (result.ok) {
-          // Final check: if the response is HTML but we expected text, it's likely a login page
-          if (result.contentType?.includes('text/html') && !name.toLowerCase().endsWith('.html')) {
-            text += `\nReceived HTML instead of file content (likely auth issue). Download URL: ${url}`;
-          } else {
-            text += `\n--- Content ---\n${result.text}`;
-          }
+          text += `\n--- Content ---\n${result.text}`;
         } else {
-          text += `\nCould not fetch content (HTTP ${result.status}). Download URL: ${url}`;
+          text += `\n${result.text}`;
         }
       } catch (fetchError) {
         const errMsg = fetchError instanceof Error ? fetchError.message : String(fetchError);
-        console.error(`[get_attachment_content] fetch error: ${errMsg}`);
-        text += `\nCould not fetch content: ${errMsg}. Download URL: ${url}`;
+        text += `\nCould not fetch content: ${errMsg}`;
       }
     } else {
-      text += `\nThis is a binary file. Download URL: ${url}`;
+      const url = attachment.attributes.url;
+      text += `\nThis is a binary file. Download URL: ${url || 'not available'}`;
     }
 
     return {
