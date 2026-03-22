@@ -256,6 +256,7 @@ export interface ProductiveAttachment {
     name: string;
     content_type?: string;
     url?: string;
+    temp_url?: string;
     size?: number;
     created_at: string;
     updated_at?: string;

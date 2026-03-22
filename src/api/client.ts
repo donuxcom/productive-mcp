@@ -907,30 +907,29 @@ export class ProductiveAPIClient {
   }
 
   async fetchAttachmentContent(attachmentId: string): Promise<{ ok: boolean; text: string; contentType: string | null; status: number }> {
-    // Per la documentazione Productive, l'attributo "url" è un URL S3 presigned
-    // con token temporaneo. Ri-fetchare l'attachment per ottenere un URL fresco.
-    console.error(`[fetchAttachmentContent] Fetching fresh metadata for attachment ${attachmentId}`);
+    // Per Productive docs ("Working with attachments" guide):
+    // Download URL = files.productive.io URL (without cache param) + ?token={API_TOKEN}
     const attachment = await this.getAttachment(attachmentId);
-    const freshUrl = attachment.data.attributes.url;
+    const filesUrl = attachment.data.attributes.url;
 
-    if (!freshUrl) {
+    if (!filesUrl) {
       return { ok: false, text: 'No download URL available in attachment metadata', contentType: null, status: 404 };
     }
 
-    console.error(`[fetchAttachmentContent] Downloading from presigned URL: ${freshUrl}`);
-    // URL S3 presigned — non serve auth, il token è nel query string
-    const response = await fetch(freshUrl, { redirect: 'follow' });
+    // Strip existing query params (cache timestamp) and add auth token
+    const baseUrl = filesUrl.split('?')[0];
+    const downloadUrl = `${baseUrl}?token=${this.config.PRODUCTIVE_API_TOKEN}`;
+
+    const response = await fetch(downloadUrl, { redirect: 'follow' });
     const text = await response.text();
     const contentType = response.headers.get('content-type');
-    console.error(`[fetchAttachmentContent] Result: status=${response.status}, contentType=${contentType}, bodyLength=${text.length}`);
 
     if (!response.ok) {
-      return { ok: false, text: `Download failed: HTTP ${response.status} from ${freshUrl}`, contentType, status: response.status };
+      return { ok: false, text: `Download failed: HTTP ${response.status}`, contentType, status: response.status };
     }
 
-    // Check if we accidentally got an HTML page
     if (contentType?.includes('text/html') && text.includes('<html')) {
-      return { ok: false, text: `Received HTML page instead of file content from ${freshUrl}`, contentType, status: response.status };
+      return { ok: false, text: 'Received HTML login page instead of file content', contentType, status: response.status };
     }
 
     return { ok: true, text, contentType, status: response.status };
