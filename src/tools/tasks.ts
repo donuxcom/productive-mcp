@@ -92,6 +92,7 @@ export async function listTasksTool(
       return `• ${task.attributes.title} (ID: ${task.id})
   Status: ${statusText}
   Type: ${taskType}
+  ${task.attributes.start_date ? `Start: ${task.attributes.start_date}` : 'No start date'}
   ${task.attributes.due_date ? `Due: ${task.attributes.due_date}` : 'No due date'}
   ${projectId ? `Project ID: ${projectId}` : ''}
   ${assigneeId ? `Assignee: ${assigneeName || 'Unknown'} (ID: ${assigneeId})` : 'Unassigned'}
@@ -191,6 +192,7 @@ export async function getProjectTasksTool(
       return `• ${task.attributes.title} (ID: ${task.id})
   Status: ${statusText}
   Type: ${taskType}
+  ${task.attributes.start_date ? `Start: ${task.attributes.start_date}` : 'No start date'}
   ${task.attributes.due_date ? `Due: ${task.attributes.due_date}` : 'No due date'}
   ${assigneeId ? `Assignee: ${assigneeName || 'Unknown'} (ID: ${assigneeId})` : 'Unassigned'}
   ${task.attributes.description ? `Description: ${task.attributes.description}` : ''}`;
@@ -266,6 +268,12 @@ export async function getTaskTool(
       text += `Description: ${task.attributes.description}\n`;
     }
     
+    if (task.attributes.start_date) {
+      text += `Start Date: ${task.attributes.start_date}\n`;
+    } else {
+      text += `Start Date: No start date set\n`;
+    }
+
     if (task.attributes.due_date) {
       text += `Due Date: ${task.attributes.due_date}\n`;
     } else {
@@ -463,6 +471,7 @@ const createTaskSchema = z.object({
   task_list_id: z.string().optional(),
   assignee_id: z.string().optional(),
   due_date: z.string().optional(),
+  start_date: z.string().optional(),
   status: z.enum(['open', 'closed']).optional().default('open'),
   type_id: z.number().min(1).max(2).optional(),
   parent_task_id: z.string().optional(),
@@ -495,6 +504,7 @@ export async function createTaskTool(
           title: params.title,
           description: params.description,
           due_date: params.due_date,
+          start_date: params.start_date,
           status: params.status === 'open' ? 1 : 2,
           ...(params.type_id !== undefined && { type_id: params.type_id }),
         },
@@ -564,6 +574,9 @@ export async function createTaskTool(
     }
     const statusText = response.data.attributes.status === 1 ? 'open' : 'closed';
     text += `\nStatus: ${statusText}`;
+    if (response.data.attributes.start_date) {
+      text += `\nStart date: ${response.data.attributes.start_date}`;
+    }
     if (response.data.attributes.due_date) {
       text += `\nDue date: ${response.data.attributes.due_date}`;
     }
@@ -636,6 +649,10 @@ export const createTaskDefinition = {
       assignee_id: {
         type: 'string',
         description: 'ID of the person to assign the task to. If PRODUCTIVE_USER_ID is configured in environment, "me" refers to that user.',
+      },
+      start_date: {
+        type: 'string',
+        description: 'Start date in YYYY-MM-DD format',
       },
       due_date: {
         type: 'string',
@@ -764,6 +781,8 @@ const updateTaskDetailsSchema = z.object({
   task_id: z.string().min(1, 'Task ID is required'),
   title: z.string().min(1, 'Task title cannot be empty').optional(),
   description: z.string().optional(),
+  start_date: z.string().optional(),
+  due_date: z.string().optional(),
 });
 
 export async function updateTaskDetailsTool(
@@ -774,10 +793,10 @@ export async function updateTaskDetailsTool(
     const params = updateTaskDetailsSchema.parse(args);
     
     // Ensure at least one field is being updated
-    if (!params.title && params.description === undefined) {
+    if (!params.title && params.description === undefined && params.start_date === undefined && params.due_date === undefined) {
       throw new McpError(
         ErrorCode.InvalidParams,
-        'At least one field (title or description) must be provided for update'
+        'At least one field (title, description, start_date, or due_date) must be provided for update'
       );
     }
     
@@ -797,7 +816,15 @@ export async function updateTaskDetailsTool(
     if (params.description !== undefined) {
       taskUpdate.data.attributes!.description = params.description;
     }
-    
+
+    if (params.start_date !== undefined) {
+      taskUpdate.data.attributes!.start_date = params.start_date;
+    }
+
+    if (params.due_date !== undefined) {
+      taskUpdate.data.attributes!.due_date = params.due_date;
+    }
+
     const response = await client.updateTask(params.task_id, taskUpdate);
     
     let text = `Task details updated successfully!\n`;
@@ -815,10 +842,18 @@ export async function updateTaskDetailsTool(
       }
     }
     
+    if (params.start_date !== undefined) {
+      text += `✓ Start date updated to: "${response.data.attributes.start_date || 'cleared'}"\n`;
+    }
+
+    if (params.due_date !== undefined) {
+      text += `✓ Due date updated to: "${response.data.attributes.due_date || 'cleared'}"\n`;
+    }
+
     if (response.data.attributes.updated_at) {
       text += `Updated at: ${response.data.attributes.updated_at}`;
     }
-    
+
     return {
       content: [{
         type: 'text',
@@ -832,7 +867,7 @@ export async function updateTaskDetailsTool(
         `Invalid parameters: ${error.errors.map(e => e.message).join(', ')}`
       );
     }
-    
+
     throw new McpError(
       ErrorCode.InternalError,
       error instanceof Error ? error.message : 'Unknown error occurred'
@@ -842,7 +877,7 @@ export async function updateTaskDetailsTool(
 
 export const updateTaskDetailsDefinition = {
   name: 'update_task_details',
-  description: 'Update the title (name) and/or description of an existing task. At least one field must be provided.',
+  description: 'Update the title, description, start date, and/or due date of an existing task. At least one field must be provided.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -857,6 +892,14 @@ export const updateTaskDetailsDefinition = {
       description: {
         type: 'string',
         description: 'New description for the task (optional, use empty string to clear description)',
+      },
+      start_date: {
+        type: 'string',
+        description: 'Start date in YYYY-MM-DD format (optional, use empty string to clear)',
+      },
+      due_date: {
+        type: 'string',
+        description: 'Due date in YYYY-MM-DD format (optional, use empty string to clear)',
       },
     },
     required: ['task_id'],

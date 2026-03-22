@@ -50,6 +50,7 @@ export interface ProductiveTask {
     status?: number; // 1 = open, 2 = closed (for API requests)
     closed?: boolean; // false = open, true = closed (from API responses)
     due_date?: string;
+    start_date?: string;
     created_at: string;
     updated_at: string;
     [key: string]: any;
@@ -121,6 +122,7 @@ export interface ProductiveTaskCreate {
       title: string;
       description?: string;
       due_date?: string;
+      start_date?: string;
       status?: number;
     };
     relationships?: {
@@ -220,6 +222,7 @@ export interface ProductiveTaskUpdate {
       title?: string;
       description?: string;
       due_date?: string;
+      start_date?: string;
       status?: number;
       custom_fields?: Record<string, any>;
     };

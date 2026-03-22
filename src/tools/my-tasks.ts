@@ -81,6 +81,7 @@ export async function myTasksTool(
       return `${statusIcon} ${task.attributes.title} (ID: ${task.id})
   Status: ${statusText}
   Type: ${taskType}
+  ${task.attributes.start_date ? `Start: ${task.attributes.start_date}` : 'No start date'}
   ${task.attributes.due_date ? `Due: ${task.attributes.due_date}` : 'No due date'}
   ${projectId ? `Project ID: ${projectId}` : ''}
   ${task.attributes.description ? `Description: ${task.attributes.description}` : ''}`;
