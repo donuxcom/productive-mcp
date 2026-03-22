@@ -497,6 +497,19 @@ export async function createTaskTool(
       assigneeId = config.PRODUCTIVE_USER_ID;
     }
     
+    // When creating a subtask, inherit project and task_list from parent if not provided
+    let projectId = params.project_id;
+    let taskListId = params.task_list_id;
+    if (params.parent_task_id && (!projectId || !taskListId)) {
+      const parentTask = await client.getTask(params.parent_task_id, ['project', 'task_list']);
+      if (!projectId && parentTask.data.relationships?.project?.data?.id) {
+        projectId = parentTask.data.relationships.project.data.id;
+      }
+      if (!taskListId && parentTask.data.relationships?.task_list?.data?.id) {
+        taskListId = parentTask.data.relationships.task_list.data.id;
+      }
+    }
+
     const taskData = {
       data: {
         type: 'tasks' as const,
@@ -511,12 +524,12 @@ export async function createTaskTool(
         relationships: {} as any,
       },
     };
-    
+
     // Add relationships if provided
-    if (params.project_id) {
+    if (projectId) {
       taskData.data.relationships.project = {
         data: {
-          id: params.project_id,
+          id: projectId,
           type: 'projects' as const,
         },
       };
@@ -531,10 +544,10 @@ export async function createTaskTool(
       };
     }
     
-    if (params.task_list_id) {
+    if (taskListId) {
       taskData.data.relationships.task_list = {
         data: {
-          id: params.task_list_id,
+          id: taskListId,
           type: 'task_lists' as const,
         },
       };
@@ -580,14 +593,14 @@ export async function createTaskTool(
     if (response.data.attributes.due_date) {
       text += `\nDue date: ${response.data.attributes.due_date}`;
     }
-    if (params.project_id) {
-      text += `\nProject ID: ${params.project_id}`;
+    if (projectId) {
+      text += `\nProject ID: ${projectId}`;
     }
     if (params.board_id) {
       text += `\nBoard ID: ${params.board_id}`;
     }
-    if (params.task_list_id) {
-      text += `\nTask List ID: ${params.task_list_id}`;
+    if (taskListId) {
+      text += `\nTask List ID: ${taskListId}`;
     }
     if (assigneeId) {
       text += `\nAssignee ID: ${assigneeId}`;
