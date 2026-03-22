@@ -907,47 +907,68 @@ export class ProductiveAPIClient {
   }
 
   async fetchAttachmentContent(attachmentId: string, url: string): Promise<{ ok: boolean; text: string; contentType: string | null; status: number }> {
-    const authHeaders = {
+    const apiAuthHeaders = {
       'X-Auth-Token': this.config.PRODUCTIVE_API_TOKEN,
       'X-Organization-Id': this.config.PRODUCTIVE_ORG_ID,
     };
 
-    // Strategy 1: Try the provided URL with auth headers
-    console.error(`[fetchAttachmentContent] Trying URL with auth: ${url}`);
-    let response = await fetch(url, { headers: authHeaders, redirect: 'follow' });
-    let text = await response.text();
-    let contentType = response.headers.get('content-type');
-    console.error(`[fetchAttachmentContent] URL result: status=${response.status}, contentType=${contentType}, isHTML=${contentType?.includes('text/html')}`);
+    const strategies: Array<{ name: string; url: string; headers?: Record<string, string> }> = [
+      // 1. API download endpoint (most reliable)
+      {
+        name: 'API download endpoint',
+        url: `${this.config.PRODUCTIVE_API_BASE_URL}attachments/${attachmentId}/download`,
+        headers: apiAuthHeaders,
+      },
+      // 2. Re-fetch attachment metadata to get a fresh URL, then download
+      // (handled separately below)
+      // 3. Provided URL with Productive auth
+      { name: 'URL with X-Auth-Token', url, headers: apiAuthHeaders },
+      // 4. Provided URL with Bearer token
+      { name: 'URL with Bearer token', url, headers: { 'Authorization': `Bearer ${this.config.PRODUCTIVE_API_TOKEN}` } },
+      // 5. Provided URL without auth (presigned)
+      { name: 'URL without auth', url },
+    ];
 
-    // If we got valid non-HTML content, return it
-    if (response.ok && !(contentType?.includes('text/html') && text.includes('<html'))) {
-      return { ok: true, text, contentType, status: response.status };
+    // First try: re-fetch attachment to get a fresh URL
+    try {
+      console.error(`[fetchAttachmentContent] Re-fetching attachment ${attachmentId} for fresh URL`);
+      const freshAttachment = await this.getAttachment(attachmentId);
+      const freshUrl = freshAttachment.data.attributes.url;
+      if (freshUrl && freshUrl !== url) {
+        console.error(`[fetchAttachmentContent] Got fresh URL: ${freshUrl} (was: ${url})`);
+        // Insert fresh URL strategies at the beginning
+        strategies.unshift(
+          { name: 'Fresh URL with X-Auth-Token', url: freshUrl, headers: apiAuthHeaders },
+          { name: 'Fresh URL without auth', url: freshUrl },
+        );
+      }
+    } catch (e) {
+      console.error(`[fetchAttachmentContent] Could not re-fetch attachment: ${e}`);
     }
 
-    // Strategy 2: Try the URL without auth (presigned URLs)
-    console.error(`[fetchAttachmentContent] Trying URL without auth: ${url}`);
-    response = await fetch(url, { redirect: 'follow' });
-    text = await response.text();
-    contentType = response.headers.get('content-type');
-    console.error(`[fetchAttachmentContent] No-auth result: status=${response.status}, contentType=${contentType}`);
+    for (const strategy of strategies) {
+      try {
+        console.error(`[fetchAttachmentContent] Strategy: ${strategy.name} → ${strategy.url}`);
+        const response = await fetch(strategy.url, {
+          headers: strategy.headers,
+          redirect: 'follow',
+        });
+        const text = await response.text();
+        const contentType = response.headers.get('content-type');
+        console.error(`[fetchAttachmentContent] Result: status=${response.status}, contentType=${contentType}, bodyLength=${text.length}`);
 
-    if (response.ok && !(contentType?.includes('text/html') && text.includes('<html'))) {
-      return { ok: true, text, contentType, status: response.status };
-    }
-
-    // Strategy 3: Try the API download endpoint
-    const downloadUrl = `${this.config.PRODUCTIVE_API_BASE_URL}attachments/${attachmentId}/download`;
-    console.error(`[fetchAttachmentContent] Trying API download endpoint: ${downloadUrl}`);
-    response = await fetch(downloadUrl, { headers: authHeaders, redirect: 'follow' });
-    text = await response.text();
-    contentType = response.headers.get('content-type');
-    console.error(`[fetchAttachmentContent] API download result: status=${response.status}, contentType=${contentType}`);
-
-    if (response.ok && !(contentType?.includes('text/html') && text.includes('<html'))) {
-      return { ok: true, text, contentType, status: response.status };
+        // Success: got non-HTML content with 2xx status
+        if (response.ok && !(contentType?.includes('text/html') && text.includes('<html'))) {
+          console.error(`[fetchAttachmentContent] Success with strategy: ${strategy.name}`);
+          return { ok: true, text, contentType, status: response.status };
+        }
+      } catch (e) {
+        console.error(`[fetchAttachmentContent] Strategy ${strategy.name} threw: ${e}`);
+      }
     }
 
     // All strategies failed
-    return { ok: false, text: `All download strategies failed. Last status: ${response.status}`, contentType, status: response.status };
+    console.error(`[fetchAttachmentContent] All strategies failed for attachment ${attachmentId}`);
+    return { ok: false, text: `All download strategies failed for attachment ${attachmentId}`, contentType: null, status: 404 };
   }
 }
